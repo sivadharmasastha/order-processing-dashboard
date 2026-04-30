@@ -5,6 +5,235 @@ import OrderTable from '../components/OrderTable';
 import Loader from '../components/Loader';
 import { fetchOrders, createOrder, deleteOrder } from '../services/api';
 
+// Static mock orders data for development/demo
+const STATIC_ORDERS = [
+  {
+    id: 'ORD-2026-001',
+    customerName: 'John Doe',
+    customerEmail: 'john.doe@example.com',
+    productName: 'Premium Laptop',
+    quantity: 2,
+    totalAmount: 2499.98,
+    status: 'completed',
+    priority: 'high',
+    shippingAddress: '123 Main St, New York, NY 10001',
+    paymentMethod: 'Credit Card',
+    createdAt: '2026-04-28T10:30:00Z',
+    updatedAt: '2026-04-29T14:20:00Z',
+    notes: 'Express shipping requested'
+  },
+  {
+    id: 'ORD-2026-002',
+    customerName: 'Jane Smith',
+    customerEmail: 'jane.smith@example.com',
+    productName: 'Wireless Headphones',
+    quantity: 1,
+    totalAmount: 199.99,
+    status: 'processing',
+    priority: 'medium',
+    shippingAddress: '456 Oak Ave, Los Angeles, CA 90001',
+    paymentMethod: 'PayPal',
+    createdAt: '2026-04-29T08:15:00Z',
+    updatedAt: '2026-04-30T09:00:00Z',
+    notes: 'Gift wrapping included'
+  },
+  {
+    id: 'ORD-2026-003',
+    customerName: 'Robert Johnson',
+    customerEmail: 'robert.j@example.com',
+    productName: 'Smart Watch Pro',
+    quantity: 3,
+    totalAmount: 899.97,
+    status: 'pending',
+    priority: 'low',
+    shippingAddress: '789 Pine Rd, Chicago, IL 60601',
+    paymentMethod: 'Debit Card',
+    createdAt: '2026-04-30T06:45:00Z',
+    updatedAt: '2026-04-30T06:45:00Z',
+    notes: 'Awaiting payment confirmation'
+  },
+  {
+    id: 'ORD-2026-004',
+    customerName: 'Emily Davis',
+    customerEmail: 'emily.davis@example.com',
+    productName: 'Gaming Console',
+    quantity: 1,
+    totalAmount: 499.99,
+    status: 'completed',
+    priority: 'high',
+    shippingAddress: '321 Elm St, Houston, TX 77001',
+    paymentMethod: 'Credit Card',
+    createdAt: '2026-04-27T14:20:00Z',
+    updatedAt: '2026-04-28T16:30:00Z',
+    notes: 'Delivered on time'
+  },
+  {
+    id: 'ORD-2026-005',
+    customerName: 'Michael Brown',
+    customerEmail: 'michael.b@example.com',
+    productName: '4K Monitor',
+    quantity: 2,
+    totalAmount: 1199.98,
+    status: 'failed',
+    priority: 'medium',
+    shippingAddress: '654 Maple Dr, Phoenix, AZ 85001',
+    paymentMethod: 'Bank Transfer',
+    createdAt: '2026-04-29T11:00:00Z',
+    updatedAt: '2026-04-30T08:15:00Z',
+    notes: 'Payment declined - customer notified'
+  },
+  {
+    id: 'ORD-2026-006',
+    customerName: 'Sarah Wilson',
+    customerEmail: 'sarah.wilson@example.com',
+    productName: 'Bluetooth Speaker',
+    quantity: 4,
+    totalAmount: 399.96,
+    status: 'processing',
+    priority: 'low',
+    shippingAddress: '987 Cedar Ln, Philadelphia, PA 19101',
+    paymentMethod: 'Credit Card',
+    createdAt: '2026-04-29T15:30:00Z',
+    updatedAt: '2026-04-30T10:00:00Z',
+    notes: 'Bulk order discount applied'
+  },
+  {
+    id: 'ORD-2026-007',
+    customerName: 'David Martinez',
+    customerEmail: 'david.m@example.com',
+    productName: 'Tablet Device',
+    quantity: 1,
+    totalAmount: 699.99,
+    status: 'cancelled',
+    priority: 'low',
+    shippingAddress: '147 Birch Way, San Antonio, TX 78201',
+    paymentMethod: 'PayPal',
+    createdAt: '2026-04-28T09:00:00Z',
+    updatedAt: '2026-04-28T12:00:00Z',
+    notes: 'Cancelled by customer request'
+  },
+  {
+    id: 'ORD-2026-008',
+    customerName: 'Lisa Anderson',
+    customerEmail: 'lisa.anderson@example.com',
+    productName: 'Mechanical Keyboard',
+    quantity: 2,
+    totalAmount: 299.98,
+    status: 'completed',
+    priority: 'medium',
+    shippingAddress: '258 Spruce St, San Diego, CA 92101',
+    paymentMethod: 'Credit Card',
+    createdAt: '2026-04-26T13:45:00Z',
+    updatedAt: '2026-04-27T11:20:00Z',
+    notes: 'RGB lighting version shipped'
+  },
+  {
+    id: 'ORD-2026-009',
+    customerName: 'James Taylor',
+    customerEmail: 'james.taylor@example.com',
+    productName: 'Webcam HD',
+    quantity: 5,
+    totalAmount: 749.95,
+    status: 'processing',
+    priority: 'high',
+    shippingAddress: '369 Willow Ct, Dallas, TX 75201',
+    paymentMethod: 'Corporate Account',
+    createdAt: '2026-04-30T07:30:00Z',
+    updatedAt: '2026-04-30T09:45:00Z',
+    notes: 'Corporate bulk order'
+  },
+  {
+    id: 'ORD-2026-010',
+    customerName: 'Patricia Thomas',
+    customerEmail: 'patricia.t@example.com',
+    productName: 'External SSD 1TB',
+    quantity: 1,
+    totalAmount: 149.99,
+    status: 'pending',
+    priority: 'medium',
+    shippingAddress: '741 Ash Blvd, San Jose, CA 95101',
+    paymentMethod: 'Debit Card',
+    createdAt: '2026-04-30T10:15:00Z',
+    updatedAt: '2026-04-30T10:15:00Z',
+    notes: 'New order - processing soon'
+  },
+  {
+    id: 'ORD-2026-011',
+    customerName: 'Christopher Lee',
+    customerEmail: 'chris.lee@example.com',
+    productName: 'USB-C Hub',
+    quantity: 3,
+    totalAmount: 179.97,
+    status: 'completed',
+    priority: 'low',
+    shippingAddress: '852 Pine Valley Rd, Austin, TX 78701',
+    paymentMethod: 'Credit Card',
+    createdAt: '2026-04-25T16:00:00Z',
+    updatedAt: '2026-04-26T10:30:00Z',
+    notes: 'Fast delivery completed'
+  },
+  {
+    id: 'ORD-2026-012',
+    customerName: 'Amanda White',
+    customerEmail: 'amanda.white@example.com',
+    productName: 'Laptop Stand',
+    quantity: 1,
+    totalAmount: 79.99,
+    status: 'processing',
+    priority: 'low',
+    shippingAddress: '963 Oak Hill Dr, Jacksonville, FL 32201',
+    paymentMethod: 'PayPal',
+    createdAt: '2026-04-29T17:20:00Z',
+    updatedAt: '2026-04-30T08:00:00Z',
+    notes: 'Standard shipping selected'
+  },
+  {
+    id: 'ORD-2026-013',
+    customerName: 'Daniel Harris',
+    customerEmail: 'daniel.harris@example.com',
+    productName: 'Noise Cancelling Headphones',
+    quantity: 1,
+    totalAmount: 349.99,
+    status: 'failed',
+    priority: 'high',
+    shippingAddress: '159 Maple Ridge, Fort Worth, TX 76101',
+    paymentMethod: 'Credit Card',
+    createdAt: '2026-04-29T12:30:00Z',
+    updatedAt: '2026-04-30T07:00:00Z',
+    notes: 'Card expired - awaiting update'
+  },
+  {
+    id: 'ORD-2026-014',
+    customerName: 'Jennifer Clark',
+    customerEmail: 'jennifer.clark@example.com',
+    productName: 'Portable Charger',
+    quantity: 6,
+    totalAmount: 299.94,
+    status: 'completed',
+    priority: 'medium',
+    shippingAddress: '357 Elm Grove, Columbus, OH 43201',
+    paymentMethod: 'Debit Card',
+    createdAt: '2026-04-27T10:00:00Z',
+    updatedAt: '2026-04-28T15:45:00Z',
+    notes: 'Bulk order fulfilled successfully'
+  },
+  {
+    id: 'ORD-2026-015',
+    customerName: 'Matthew Rodriguez',
+    customerEmail: 'matt.rodriguez@example.com',
+    productName: 'Wireless Mouse',
+    quantity: 10,
+    totalAmount: 399.90,
+    status: 'pending',
+    priority: 'medium',
+    shippingAddress: '468 Cedar Creek, Charlotte, NC 28201',
+    paymentMethod: 'Corporate Account',
+    createdAt: '2026-04-30T11:00:00Z',
+    updatedAt: '2026-04-30T11:00:00Z',
+    notes: 'Office supplies order - verify stock'
+  }
+];
+
 function OrdersPage() {
   // State management
   const [orders, setOrders] = useState([]);
@@ -81,9 +310,12 @@ function OrdersPage() {
   }, [successMessage]);
 
   /**
-   * Fetch orders from API
+   * Fetch orders from API or use static data
+   * Set USE_STATIC_DATA to false to enable API calls
    */
   const loadOrders = useCallback(async (silent = false) => {
+    const USE_STATIC_DATA = true; // Toggle this to switch between static and API data
+    
     try {
       if (!silent) {
         setLoading(true);
@@ -92,19 +324,40 @@ function OrdersPage() {
       }
       setError(null);
       
-      const params = {};
-      // You can add API-level filtering here if backend supports it
-      // if (statusFilter !== 'all') params.status = statusFilter;
+      let ordersArray = [];
       
-      const data = await fetchOrders(params);
+      if (USE_STATIC_DATA) {
+        // Simulate network delay for realistic behavior
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        // Use static orders data
+        ordersArray = [...STATIC_ORDERS];
+        console.log('Loaded static orders:', ordersArray.length);
+      } else {
+        // Fetch from API
+        const params = {};
+        // You can add API-level filtering here if backend supports it
+        // if (statusFilter !== 'all') params.status = statusFilter;
+        
+        const data = await fetchOrders(params);
+        
+        // Ensure data is an array
+        ordersArray = Array.isArray(data) ? data : data.orders || [];
+      }
       
-      // Ensure data is an array
-      const ordersArray = Array.isArray(data) ? data : data.orders || [];
       setOrders(ordersArray);
       
     } catch (err) {
       console.error('Error loading orders:', err);
-      setError(err.message || 'Failed to load orders');
+      
+      // Fallback to static data if API fails
+      if (!silent) {
+        console.warn('API failed, falling back to static data');
+        setOrders([...STATIC_ORDERS]);
+        setError('Using demo data - API unavailable');
+      } else {
+        setError(err.message || 'Failed to load orders');
+      }
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -172,8 +425,32 @@ function OrdersPage() {
    * Handle order creation
    */
   const handleCreateOrder = async (orderData) => {
+    const USE_STATIC_DATA = true; // Should match loadOrders setting
+    
     try {
-      const newOrder = await createOrder(orderData);
+      let newOrder;
+      
+      if (USE_STATIC_DATA) {
+        // Create mock order for static mode
+        await new Promise(resolve => setTimeout(resolve, 300)); // Simulate API delay
+        
+        const orderNumber = orders.length + 1;
+        newOrder = {
+          id: `ORD-2026-${String(orderNumber).padStart(3, '0')}`,
+          ...orderData,
+          status: 'pending',
+          priority: orderData.priority || 'medium',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          notes: orderData.notes || 'New order created'
+        };
+        
+        console.log('Created static order:', newOrder);
+      } else {
+        // Use API
+        newOrder = await createOrder(orderData);
+      }
+      
       setOrders([newOrder, ...orders]);
       setShowCreateForm(false);
       setSuccessMessage('Order created successfully!');
@@ -191,8 +468,18 @@ function OrdersPage() {
       return;
     }
 
+    const USE_STATIC_DATA = true; // Should match loadOrders setting
+
     try {
-      await deleteOrder(orderId);
+      if (USE_STATIC_DATA) {
+        // Simulate API delay
+        await new Promise(resolve => setTimeout(resolve, 300));
+        console.log('Deleted static order:', orderId);
+      } else {
+        // Use API
+        await deleteOrder(orderId);
+      }
+      
       setOrders(orders.filter(order => order.id !== orderId));
       setSuccessMessage('Order deleted successfully!');
     } catch (err) {
