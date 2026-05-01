@@ -20,29 +20,34 @@ function OrderDetails() {
       setLoading(true);
       setError(null);
       
-      // Simulate API call - replace with actual API call
-      await new Promise(resolve => setTimeout(resolve, 500));
+      // Fetch order details from API
+      const data = await fetchOrderById(orderId);
       
-      // Mock data for now - in production, use: const data = await fetchOrderById(orderId);
-      const mockOrder = {
-        id: orderId,
-        customerName: 'John Doe',
-        customerEmail: 'john.doe@example.com',
-        productName: 'Premium Laptop',
-        quantity: 2,
-        totalAmount: 2499.98,
-        status: 'completed',
-        priority: 'high',
-        shippingAddress: '123 Main St, New York, NY 10001',
-        paymentMethod: 'Credit Card',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        notes: 'Express shipping requested'
-      };
+      // Validate order data
+      if (!data || !data.id) {
+        throw new Error('Invalid order data received');
+      }
       
-      setOrder(mockOrder);
+      setOrder(data);
+      console.log('✓ Order details loaded:', data.id);
+      
     } catch (err) {
-      setError(err.message || 'Failed to load order details');
+      console.error('Error loading order details:', err);
+      
+      // Provide user-friendly error messages
+      let errorMessage = 'Failed to load order details';
+      
+      if (err.message.includes('Network Error')) {
+        errorMessage = 'Unable to connect to server. Please check your connection.';
+      } else if (err.message.includes('404')) {
+        errorMessage = 'Order not found. It may have been deleted.';
+      } else if (err.message.includes('403')) {
+        errorMessage = 'You do not have permission to view this order.';
+      } else if (err.message) {
+        errorMessage = err.message;
+      }
+      
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
