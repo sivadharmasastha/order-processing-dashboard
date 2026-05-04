@@ -207,6 +207,64 @@ export const cancelAllRequests = () => {
 };
 
 // ============================================
+// Response Normalization Helper
+// ============================================
+
+/**
+ * Normalize API response to handle different response structures
+ * Supports various response formats:
+ * - Direct data: { id: 1, name: "..." }
+ * - Wrapped: { success: true, data: {...} }
+ * - With message: { success: true, data: {...}, message: "..." }
+ * - Paginated: { data: [...], total: 100, page: 1, limit: 10 }
+ * 
+ * @param {*} response - Raw API response
+ * @param {string} dataKey - Expected data key (default: 'data')
+ * @returns {*} Normalized data
+ */
+const normalizeResponse = (response, dataKey = 'data') => {
+  if (!response) return null;
+  
+  // If response is an array, return it directly
+  if (Array.isArray(response)) {
+    return response;
+  }
+  
+  // If response is not an object, return it directly
+  if (typeof response !== 'object') {
+    return response;
+  }
+  
+  // Check for wrapped response with data key
+  if (response[dataKey] !== undefined) {
+    return response[dataKey];
+  }
+  
+  // Check for alternative data keys
+  const alternativeKeys = ['order', 'orders', 'result', 'results', 'items'];
+  for (const key of alternativeKeys) {
+    if (response[key] !== undefined) {
+      return response[key];
+    }
+  }
+  
+  // If response has success flag but no data key, might be direct data
+  if (response.success !== undefined && Object.keys(response).length > 2) {
+    const { success, message, ...rest } = response;
+    if (Object.keys(rest).length > 0) {
+      return rest;
+    }
+  }
+  
+  // Return response as-is if it looks like direct data (has id or other fields)
+  if (response.id || response._id || Object.keys(response).length > 0) {
+    return response;
+  }
+  
+  return null;
+};
+
+// ============================================
 // Order API Functions
 // ============================================
 
@@ -220,7 +278,7 @@ export const cancelAllRequests = () => {
  * @param {string} params.sortOrder - Sort order (asc, desc)
  * @param {string} params.search - Search query
  * @param {string} requestKey - Unique key for request cancellation
- * @returns {Promise<Array|Object>} List of orders or paginated response
+ * @returns {Promise<Array|Object>} List of orders or paginated response (normalized)
  */
 export const fetchOrders = async (params = {}, requestKey = 'fetchOrders') => {
   try {
@@ -239,7 +297,19 @@ export const fetchOrders = async (params = {}, requestKey = 'fetchOrders') => {
     // Remove from pending requests
     pendingRequests.delete(requestKey);
     
-    return response.data;
+    // Normalize response to handle different API response structures
+    const normalizedData = normalizeResponse(response.data, 'orders') || normalizeResponse(response.data);
+    
+    // Log normalized data structure in development
+    if (ENABLE_LOGS) {
+      console.log('Normalized orders response:', {
+        rawType: Array.isArray(response.data) ? 'array' : typeof response.data,
+        normalizedType: Array.isArray(normalizedData) ? 'array' : typeof normalizedData,
+        count: Array.isArray(normalizedData) ? normalizedData.length : 'N/A'
+      });
+    }
+    
+    return normalizedData || response.data;
   } catch (error) {
     pendingRequests.delete(requestKey);
     
@@ -256,7 +326,7 @@ export const fetchOrders = async (params = {}, requestKey = 'fetchOrders') => {
  * Fetch a single order by ID
  * @param {string} orderId - Order ID
  * @param {string} requestKey - Unique key for request cancellation
- * @returns {Promise<Object>} Order details
+ * @returns {Promise<Object>} Order details (normalized)
  */
 export const fetchOrderById = async (orderId, requestKey = `fetchOrder_${orderId}`) => {
   try {
@@ -278,7 +348,19 @@ export const fetchOrderById = async (orderId, requestKey = `fetchOrder_${orderId
     // Remove from pending requests
     pendingRequests.delete(requestKey);
     
-    return response.data;
+    // Normalize response to handle different API response structures
+    const normalizedData = normalizeResponse(response.data, 'order') || normalizeResponse(response.data);
+    
+    // Log normalized data structure in development
+    if (ENABLE_LOGS) {
+      console.log('Normalized order response:', {
+        rawHasData: !!response.data.data,
+        rawHasOrder: !!response.data.order,
+        normalizedHasId: !!(normalizedData && normalizedData.id)
+      });
+    }
+    
+    return normalizedData || response.data;
   } catch (error) {
     pendingRequests.delete(requestKey);
     
@@ -303,7 +385,7 @@ export const fetchOrderById = async (orderId, requestKey = `fetchOrder_${orderId
  * @param {string} orderData.shippingAddress - Shipping address
  * @param {string} orderData.paymentMethod - Payment method
  * @param {string} orderData.notes - Additional notes
- * @returns {Promise<Object>} Created order
+ * @returns {Promise<Object>} Created order (normalized)
  */
 export const createOrder = async (orderData) => {
   try {
@@ -332,7 +414,10 @@ export const createOrder = async (orderData) => {
     
     const response = await apiClient.post('/orders', orderData);
     
-    return response.data;
+    // Normalize response
+    const normalizedData = normalizeResponse(response.data, 'order') || normalizeResponse(response.data);
+    
+    return normalizedData || response.data;
   } catch (error) {
     throw error;
   }
@@ -342,7 +427,7 @@ export const createOrder = async (orderData) => {
  * Update an existing order
  * @param {string} orderId - Order ID
  * @param {Object} orderData - Updated order data
- * @returns {Promise<Object>} Updated order
+ * @returns {Promise<Object>} Updated order (normalized)
  */
 export const updateOrder = async (orderId, orderData) => {
   try {
@@ -352,7 +437,10 @@ export const updateOrder = async (orderId, orderData) => {
     
     const response = await apiClient.put(`/orders/${orderId}`, orderData);
     
-    return response.data;
+    // Normalize response
+    const normalizedData = normalizeResponse(response.data, 'order') || normalizeResponse(response.data);
+    
+    return normalizedData || response.data;
   } catch (error) {
     throw error;
   }
@@ -362,7 +450,7 @@ export const updateOrder = async (orderId, orderData) => {
  * Partially update an order (PATCH)
  * @param {string} orderId - Order ID
  * @param {Object} updates - Partial order updates
- * @returns {Promise<Object>} Updated order
+ * @returns {Promise<Object>} Updated order (normalized)
  */
 export const patchOrder = async (orderId, updates) => {
   try {
@@ -372,7 +460,10 @@ export const patchOrder = async (orderId, updates) => {
     
     const response = await apiClient.patch(`/orders/${orderId}`, updates);
     
-    return response.data;
+    // Normalize response
+    const normalizedData = normalizeResponse(response.data, 'order') || normalizeResponse(response.data);
+    
+    return normalizedData || response.data;
   } catch (error) {
     throw error;
   }

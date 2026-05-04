@@ -3,9 +3,14 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import CreateOrderForm from '../components/CreateOrderForm';
 import OrderTable from '../components/OrderTable';
 import Loader from '../components/Loader';
+import ApiStatus from '../components/ApiStatus';
 import { fetchOrders, createOrder, deleteOrder } from '../services/api';
+import useApiStatus from '../hooks/useApiStatus';
 
 function OrdersPage() {
+  // API Status
+  const { isOnline: apiOnline } = useApiStatus(60000);
+  
   // State management
   const [orders, setOrders] = useState([]);
   const [filteredOrders, setFilteredOrders] = useState([]);
@@ -442,8 +447,20 @@ function OrdersPage() {
 
   return (
     <div className="orders-page">
+      {/* API Connection Banner */}
+      {!apiOnline && (
+        <div className="connection-banner">
+          <span>⚠️ API Connection Lost - Working in offline mode</span>
+        </div>
+      )}
+
       <div className="page-header">
-        <h2>Orders Management</h2>
+        <div>
+          <h2>Orders Management</h2>
+          <div className="page-header-status">
+            <ApiStatus compact={true} showDetails={false} />
+          </div>
+        </div>
         <button 
           className="btn btn-primary"
           onClick={() => setShowCreateForm(!showCreateForm)}
