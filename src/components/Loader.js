@@ -2,15 +2,20 @@ import React from 'react';
 import PropTypes from 'prop-types';
 
 /**
- * Loader Component
+ * Loader Component - Production Level
  * Displays a loading spinner with optional message
- * Supports multiple variants: fullscreen, overlay, and inline
+ * Supports multiple variants: fullscreen, overlay, inline, and minimal
+ * Includes accessibility features and customization options
  */
 function Loader({ 
   message = 'Loading...', 
   size = 'medium',
   variant = 'fullscreen',
-  overlay = false 
+  overlay = false,
+  showProgress = false,
+  progress = 0,
+  backdrop = true,
+  className = ''
 }) {
   // Size classes for the spinner
   const sizeClasses = {
@@ -23,14 +28,22 @@ function Loader({
   const variantClasses = {
     fullscreen: 'loader-fullscreen',
     overlay: 'loader-overlay',
-    inline: 'loader-inline'
+    inline: 'loader-inline',
+    minimal: 'loader-minimal',
+    card: 'loader-card'
   };
 
-  const loaderClass = `loader-container ${variantClasses[variant] || variantClasses.fullscreen}`;
+  const loaderClass = [
+    'loader-container',
+    variantClasses[variant] || variantClasses.fullscreen,
+    backdrop ? 'with-backdrop' : '',
+    className
+  ].filter(Boolean).join(' ');
+  
   const spinnerClass = `loader-spinner ${sizeClasses[size] || sizeClasses.medium}`;
 
   return (
-    <div className={loaderClass} role="status" aria-live="polite">
+    <div className={loaderClass} role="status" aria-live="polite" aria-busy="true">
       <div className="loader-content">
         <div className={spinnerClass} aria-hidden="true">
           <div className="spinner-circle"></div>
@@ -42,6 +55,21 @@ function Loader({
             {message}
           </p>
         )}
+        {showProgress && (
+          <div className="loader-progress">
+            <div className="progress-bar">
+              <div 
+                className="progress-fill" 
+                style={{ width: `${Math.min(100, Math.max(0, progress))}%` }}
+                role="progressbar"
+                aria-valuenow={progress}
+                aria-valuemin="0"
+                aria-valuemax="100"
+              />
+            </div>
+            <span className="progress-text">{Math.round(progress)}%</span>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -51,8 +79,12 @@ function Loader({
 Loader.propTypes = {
   message: PropTypes.string,
   size: PropTypes.oneOf(['small', 'medium', 'large']),
-  variant: PropTypes.oneOf(['fullscreen', 'overlay', 'inline']),
-  overlay: PropTypes.bool
+  variant: PropTypes.oneOf(['fullscreen', 'overlay', 'inline', 'minimal', 'card']),
+  overlay: PropTypes.bool,
+  showProgress: PropTypes.bool,
+  progress: PropTypes.number,
+  backdrop: PropTypes.bool,
+  className: PropTypes.string
 };
 
 // Default props
@@ -60,7 +92,11 @@ Loader.defaultProps = {
   message: 'Loading...',
   size: 'medium',
   variant: 'fullscreen',
-  overlay: false
+  overlay: false,
+  showProgress: false,
+  progress: 0,
+  backdrop: true,
+  className: ''
 };
 
 export default Loader;

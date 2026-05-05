@@ -4,6 +4,8 @@ import CreateOrderForm from '../components/CreateOrderForm';
 import OrderTable from '../components/OrderTable';
 import Loader from '../components/Loader';
 import ApiStatus from '../components/ApiStatus';
+import { TableSkeleton } from '../components/SkeletonLoader';
+import ButtonWithLoading from '../components/ButtonWithLoading';
 import { fetchOrders, createOrder, deleteOrder } from '../services/api';
 import useApiStatus from '../hooks/useApiStatus';
 
@@ -440,13 +442,38 @@ function OrdersPage() {
     );
   };
 
-  // Show loader on initial load
+  // Show skeleton loader on initial load
   if (loading && !orders.length) {
-    return <Loader />;
+    return (
+      <div className="orders-page">
+        <div className="page-header">
+          <div>
+            <h2>Orders Management</h2>
+          </div>
+        </div>
+        <div className="orders-controls">
+          <div className="skeleton-search-bar" style={{ height: '40px', borderRadius: '6px' }} />
+        </div>
+        <div className="orders-section">
+          <div className="section-header">
+            <h3>Loading orders...</h3>
+          </div>
+          <TableSkeleton rows={10} columns={8} />
+        </div>
+      </div>
+    );
   }
 
   return (
     <div className="orders-page">
+      {/* Refreshing Indicator */}
+      {refreshing && (
+        <div className="refreshing-indicator">
+          <span className="spinner-small"></span>
+          <span>Refreshing data...</span>
+        </div>
+      )}
+
       {/* API Connection Banner */}
       {!apiOnline && (
         <div className="connection-banner">
@@ -539,13 +566,15 @@ function OrdersPage() {
             Auto-refresh (30s)
           </label>
 
-          <button 
-            className="btn btn-secondary"
+          <ButtonWithLoading
+            variant="secondary"
             onClick={() => loadOrders()}
-            disabled={refreshing}
+            loading={refreshing}
+            loadingText="Refreshing..."
+            icon="↻"
           >
-            {refreshing ? 'Refreshing...' : '↻ Refresh'}
-          </button>
+            Refresh
+          </ButtonWithLoading>
         </div>
       </div>
 

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import ButtonWithLoading from './ButtonWithLoading';
 
 function CreateOrderForm({ onSubmit, onCancel }) {
   const [formData, setFormData] = useState({
@@ -511,34 +512,24 @@ function CreateOrderForm({ onSubmit, onCancel }) {
         </div>
 
         <div className="form-actions">
-          <button
+          <ButtonWithLoading
             type="button"
             onClick={onCancel}
-            className="btn btn-secondary"
+            variant="secondary"
             disabled={loading}
-            aria-label="Cancel order creation"
+            icon="✖️"
           >
-            <span>✖️</span>
             Cancel
-          </button>
-          <button
+          </ButtonWithLoading>
+          <ButtonWithLoading
             type="submit"
-            className="btn btn-primary"
-            disabled={loading}
-            aria-label={loading ? 'Creating order' : 'Submit order'}
+            variant="primary"
+            loading={loading}
+            loadingText="Creating Order..."
+            icon="✓"
           >
-            {loading ? (
-              <>
-                <span className="spinner-small"></span>
-                Creating Order...
-              </>
-            ) : (
-              <>
-                <span>✓</span>
-                Create Order
-              </>
-            )}
-          </button>
+            Create Order
+          </ButtonWithLoading>
         </div>
       </form>
     </div>

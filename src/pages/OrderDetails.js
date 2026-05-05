@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Loader from '../components/Loader';
+import { CardSkeleton } from '../components/SkeletonLoader';
+import ButtonWithLoading from '../components/ButtonWithLoading';
 import { fetchOrderById, updateOrder, retryOrder, patchOrder, cancelOrder } from '../services/api';
 
 function OrderDetails() {
@@ -322,7 +324,23 @@ function OrderDetails() {
   };
 
   if (loading) {
-    return <Loader message="Loading order details..." size="large" />;
+    return (
+      <div className="order-details-page">
+        <div className="page-header-details">
+          <button onClick={() => navigate('/orders')} className="btn-back">
+            ← Back to Orders
+          </button>
+          <div className="header-info">
+            <h2>Loading order details...</h2>
+          </div>
+        </div>
+        <div className="order-details-container">
+          <CardSkeleton />
+          <CardSkeleton />
+          <CardSkeleton />
+        </div>
+      </div>
+    );
   }
 
   if (error) {
@@ -401,53 +419,65 @@ function OrderDetails() {
         {!isEditing && (
           <>
             {canEdit() && (
-              <button
+              <ButtonWithLoading
                 onClick={handleEdit}
+                loading={updating}
                 disabled={updating}
-                className="btn btn-secondary"
+                variant="secondary"
+                icon="✏️"
               >
-                ✏️ Edit Order
-              </button>
+                Edit Order
+              </ButtonWithLoading>
             )}
             
             {order.status === 'failed' && (
-              <button
+              <ButtonWithLoading
                 onClick={handleRetry}
+                loading={updating}
+                loadingText="Retrying..."
                 disabled={updating}
-                className="btn btn-warning"
+                variant="warning"
+                icon="🔄"
               >
-                {updating ? '⏳ Retrying...' : '🔄 Retry Order'}
-              </button>
+                Retry Order
+              </ButtonWithLoading>
             )}
             
             {canCancel() && (
-              <button
+              <ButtonWithLoading
                 onClick={handleCancel}
+                loading={updating}
+                loadingText="Cancelling..."
                 disabled={updating}
-                className="btn btn-danger"
+                variant="danger"
+                icon="✖️"
               >
-                {updating ? '⏳ Cancelling...' : '✖️ Cancel Order'}
-              </button>
+                Cancel Order
+              </ButtonWithLoading>
             )}
           </>
         )}
 
         {isEditing && (
           <>
-            <button
+            <ButtonWithLoading
               onClick={handleSaveEdit}
+              loading={updating}
+              loadingText="Saving..."
               disabled={updating}
-              className="btn btn-success"
+              variant="success"
+              icon="✓"
             >
-              {updating ? '⏳ Saving...' : '✓ Save Changes'}
-            </button>
-            <button
+              Save Changes
+            </ButtonWithLoading>
+            <ButtonWithLoading
               onClick={handleCancelEdit}
               disabled={updating}
-              className="btn btn-secondary"
+              variant="secondary"
+              icon="✖️"
             >
-              ✖️ Cancel Edit
-            </button>
+              Cancel Edit
+            </ButtonWithLoading>
           </>
         )}
       </div>

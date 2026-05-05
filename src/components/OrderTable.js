@@ -1,6 +1,21 @@
-import React from 'react';
+import React, { useState } from 'react';
+import PropTypes from 'prop-types';
 
-function OrderTable({ orders, onOrderClick, onDeleteOrder, sortBy, sortOrder, onSortChange }) {
+function OrderTable({ orders, onOrderClick, onDeleteOrder, sortBy, sortOrder, onSortChange, deletingOrderId = null }) {
+  const [localDeletingId, setLocalDeletingId] = useState(null);
+
+  /**
+   * Handle delete with local loading state
+   */
+  const handleDelete = async (orderId) => {
+    setLocalDeletingId(orderId);
+    try {
+      await onDeleteOrder(orderId);
+    } finally {
+      setLocalDeletingId(null);
+    }
+  };
+
   /**
    * Format currency
    */
@@ -77,48 +92,75 @@ function OrderTable({ orders, onOrderClick, onDeleteOrder, sortBy, sortOrder, on
           </tr>
         </thead>
         <tbody>
-          {orders.map((order) => (
-            <tr key={order.id} className="order-row">
-              <td className="order-id">
-                <button 
-                  onClick={() => onOrderClick(order.id)}
-                  className="link-button"
-                >
-                  {order.id}
-                </button>
-              </td>
-              <td>{order.customerName}</td>
-              <td>{order.productName}</td>
-              <td className="text-center">{order.quantity}</td>
-              <td className="text-right">{formatCurrency(order.totalAmount)}</td>
-              <td>
-                <span className={`status-badge ${getStatusClass(order.status)}`}>
-                  {order.status}
-                </span>
-              </td>
-              <td className="date-cell">{formatDate(order.createdAt)}</td>
-              <td className="actions-cell">
-                <button
-                  onClick={() => onOrderClick(order.id)}
-                  className="btn-action btn-view"
-                  title="View Details"
-                >
-                  👁
-                </button>
-                <button
-                  onClick={() => onDeleteOrder(order.id)}
-                  className="btn-action btn-delete"
-                  title="Delete Order"
-                >
-                  🗑
-                </button>
-              </td>
-            </tr>
-          ))}
+          {orders.map((order) => {
+            const isDeleting = localDeletingId === order.id || deletingOrderId === order.id;
+            return (
+              <tr 
+                key={order.id} 
+                className={`order-row ${isDeleting ? 'row-deleting' : ''}`}
+                style={{ opacity: isDeleting ? 0.5 : 1 }}
+              >
+                <td className="order-id">
+                  <button 
+                    onClick={() => onOrderClick(order.id)}
+                    className="link-button"
+                    disabled={isDeleting}
+                  >
+                    {order.id}
+                  </button>
+                </td>
+                <td>{order.customerName}</td>
+                <td>{order.productName}</td>
+                <td className="text-center">{order.quantity}</td>
+                <td className="text-right">{formatCurrency(order.totalAmount)}</td>
+                <td>
+                  <span className={`status-badge ${getStatusClass(order.status)}`}>
+                    {order.status}
+                  </span>
+                </td>
+                <td className="date-cell">{formatDate(order.createdAt)}</td>
+                <td className="actions-cell">
+                  {isDeleting ? (
+                    <span className="action-loading">
+                      <span className="spinner-tiny"></span>
+                      Deleting...
+                    </span>
+                  ) : (
+                    <>
+                      <button
+                        onClick={() => onOrderClick(order.id)}
+                        className="btn-action btn-view"
+                        title="View Details"
+                      >
+                        👁
+                      </button>
+                      <button
+                        onClick={() => handleDelete(order.id)}
+                        className="btn-action btn-delete"
+                        title="Delete Order"
+                      >
+                        🗑
+                      </button>
+                    </>
+                  )}
+                </td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>
   );
 }
+
+OrderTable.propTypes = {
+  orders: PropTypes.array.isRequired,
+  onOrderClick: PropTypes.func.isRequired,
+  onDeleteOrder: PropTypes.func.isRequired,
+  sortBy: PropTypes.string.isRequired,
+  sortOrder: PropTypes.oneOf(['asc', 'desc']).isRequired,
+  onSortChange: PropTypes.func.isRequired,
+  deletingOrderId: PropTypes.string
+};
 
 export default OrderTable;
