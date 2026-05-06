@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import ButtonWithLoading from './ButtonWithLoading';
 
 function CreateOrderForm({ onSubmit, onCancel }) {
@@ -19,6 +19,15 @@ function CreateOrderForm({ onSubmit, onCancel }) {
   const [fieldErrors, setFieldErrors] = useState({});
   const [touched, setTouched] = useState({});
   const [success, setSuccess] = useState(false);
+  
+  // Production-level form state management
+  const [isFormValid, setIsFormValid] = useState(false);
+  const [isFormDirty, setIsFormDirty] = useState(false);
+  const [submissionAttempts, setSubmissionAttempts] = useState(0);
+  const [lastSavedDraft, setLastSavedDraft] = useState(null);
+  const [showValidationSummary, setShowValidationSummary] = useState(false);
+  const formRef = useRef(null);
+  const submitButtonRef = useRef(null);
 
   // Auto-calculate total amount when quantity or unit price changes
   useEffect(() => {
@@ -30,6 +39,153 @@ function CreateOrderForm({ onSubmit, onCancel }) {
       }));
     }
   }, [formData.quantity, formData.unitPrice]);
+
+  // Track form validity in real-time
+  useEffect(() => {
+    validateFormCompleteness();
+  }, [formData, fieldErrors]);
+
+  // Auto-save draft functionality (every 30 seconds if form is dirty)
+  useEffect(() => {
+    if (!isFormDirty) return;
+
+    const autoSaveInterval = setInterval(() => {
+      saveDraft();
+    }, 30000); // 30 seconds
+
+    return () => clearInterval(autoSaveInterval);
+  }, [formData, isFormDirty]);
+
+  // Load saved draft on mount
+  useEffect(() => {
+    loadDraft();
+  }, []);
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      // Ctrl/Cmd + Enter to submit
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter' && isFormValid && !loading) {
+        e.preventDefault();
+        submitButtonRef.current?.click();
+      }
+      
+      // Ctrl/Cmd + S to save draft
+      if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+        e.preventDefault();
+        saveDraft();
+      }
+
+      // Escape to cancel
+      if (e.key === 'Escape' && !loading) {
+        e.preventDefault();
+        handleCancel();
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [isFormValid, loading, formData]);
+
+  // Warn user about unsaved changes
+  useEffect(() => {
+    const handleBeforeUnload = (e) => {
+      if (isFormDirty && !success) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [isFormDirty, success]);
+
+  /**
+   * Validate form completeness and required fields
+   */
+  const validateFormCompleteness = useCallback(() => {
+    // Check required fields
+    const requiredFields = ['customerName', 'customerEmail', 'productName'];
+    const hasAllRequired = requiredFields.every(field => formData[field]?.trim());
+
+    // Check for any validation errors
+    const hasErrors = Object.values(fieldErrors).some(error => error);
+
+    // Check business rules
+    const hasValidQuantity = formData.quantity > 0;
+    const hasValidPrice = formData.unitPrice >= 0;
+    const hasValidTotal = formData.totalAmount > 0;
+
+    const isValid = hasAllRequired && !hasErrors && hasValidQuantity && hasValidPrice && hasValidTotal;
+    
+    setIsFormValid(isValid);
+  }, [formData, fieldErrors]);
+
+  /**
+   * Save form data as draft to localStorage
+   */
+  const saveDraft = useCallback(() => {
+    try {
+      const draft = {
+        data: formData,
+        timestamp: new Date().toISOString(),
+        version: '1.0'
+      };
+      localStorage.setItem('orderFormDraft', JSON.stringify(draft));
+      setLastSavedDraft(draft.timestamp);
+      
+      // Show brief success notification
+      const notification = document.createElement('div');
+      notification.className = 'draft-saved-notification';
+      notification.textContent = '💾 Draft saved';
+      document.body.appendChild(notification);
+      
+      setTimeout(() => {
+        notification.remove();
+      }, 2000);
+    } catch (err) {
+      console.error('Failed to save draft:', err);
+    }
+  }, [formData]);
+
+  /**
+   * Load draft from localStorage
+   */
+  const loadDraft = useCallback(() => {
+    try {
+      const savedDraft = localStorage.getItem('orderFormDraft');
+      if (savedDraft) {
+        const draft = JSON.parse(savedDraft);
+        const draftAge = Date.now() - new Date(draft.timestamp).getTime();
+        
+        // Only load draft if it's less than 24 hours old
+        if (draftAge < 24 * 60 * 60 * 1000) {
+          const shouldLoad = window.confirm(
+            `Found a saved draft from ${new Date(draft.timestamp).toLocaleString()}. Would you like to restore it?`
+          );
+          
+          if (shouldLoad) {
+            setFormData(draft.data);
+            setIsFormDirty(true);
+            setLastSavedDraft(draft.timestamp);
+          }
+        } else {
+          // Clear old draft
+          localStorage.removeItem('orderFormDraft');
+        }
+      }
+    } catch (err) {
+      console.error('Failed to load draft:', err);
+    }
+  }, []);
+
+  /**
+   * Clear saved draft
+   */
+  const clearDraft = useCallback(() => {
+    localStorage.removeItem('orderFormDraft');
+    setLastSavedDraft(null);
+  }, []);
 
   // Validation functions
   const validateField = (name, value) => {
@@ -84,19 +240,27 @@ function CreateOrderForm({ onSubmit, onCancel }) {
   const handleChange = (e) => {
     const { name, value } = e.target;
     
+    // Mark form as dirty
+    setIsFormDirty(true);
+    
     // Update form data
     setFormData(prev => ({
       ...prev,
       [name]: value
     }));
 
-    // Validate field if it has been touched
-    if (touched[name]) {
+    // Real-time validation for touched fields
+    if (touched[name] || submissionAttempts > 0) {
       const errorMessage = validateField(name, value);
       setFieldErrors(prev => ({
         ...prev,
         [name]: errorMessage
       }));
+    }
+    
+    // Clear general error when user starts typing
+    if (error) {
+      setError(null);
     }
   };
 
@@ -117,13 +281,35 @@ function CreateOrderForm({ onSubmit, onCancel }) {
     }));
   };
 
+  /**
+   * Handle cancel with unsaved changes warning
+   */
+  const handleCancel = () => {
+    if (isFormDirty && !success) {
+      const confirmCancel = window.confirm(
+        'You have unsaved changes. Are you sure you want to cancel?'
+      );
+      if (!confirmCancel) return;
+    }
+    
+    clearDraft();
+    onCancel();
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    // Increment submission attempts
+    setSubmissionAttempts(prev => prev + 1);
+    
     setError(null);
     setSuccess(false);
+    setShowValidationSummary(false);
     
     // Validate all fields
     const errors = {};
+    const requiredFields = ['customerName', 'customerEmail', 'productName'];
+    
     Object.keys(formData).forEach(key => {
       const errorMessage = validateField(key, formData[key]);
       if (errorMessage) {
@@ -138,21 +324,36 @@ function CreateOrderForm({ onSubmit, onCancel }) {
     });
     setTouched(allTouched);
 
-    // If there are errors, set them and prevent submission
+    // If there are errors, show validation summary
     if (Object.keys(errors).length > 0) {
       setFieldErrors(errors);
-      setError('Please correct the errors in the form before submitting');
-      // Scroll to first error
-      const firstErrorField = document.querySelector('.form-group.has-error');
-      if (firstErrorField) {
-        firstErrorField.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      }
+      setShowValidationSummary(true);
+      
+      const errorCount = Object.keys(errors).length;
+      const errorFields = Object.keys(errors).join(', ');
+      setError(`Please correct ${errorCount} error${errorCount > 1 ? 's' : ''} before submitting`);
+      
+      // Scroll to first error with smooth animation
+      setTimeout(() => {
+        const firstErrorField = document.querySelector('.form-group.has-error');
+        if (firstErrorField) {
+          firstErrorField.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          
+          // Focus the input field
+          const input = firstErrorField.querySelector('input, select, textarea');
+          if (input) {
+            input.focus();
+          }
+        }
+      }, 100);
+      
       return;
     }
 
     // Additional validation
     if (!formData.customerName || !formData.customerEmail || !formData.productName) {
       setError('Please fill in all required fields');
+      setShowValidationSummary(true);
       return;
     }
 
@@ -166,6 +367,11 @@ function CreateOrderForm({ onSubmit, onCancel }) {
       return;
     }
 
+    // Double submission prevention
+    if (loading) {
+      return;
+    }
+
     setLoading(true);
     
     try {
@@ -173,6 +379,11 @@ function CreateOrderForm({ onSubmit, onCancel }) {
       
       // Show success message
       setSuccess(true);
+      setIsFormDirty(false);
+      setSubmissionAttempts(0);
+      
+      // Clear draft after successful submission
+      clearDraft();
       
       // Reset form on success
       setFormData({
@@ -189,14 +400,27 @@ function CreateOrderForm({ onSubmit, onCancel }) {
       });
       setFieldErrors({});
       setTouched({});
+      setShowValidationSummary(false);
 
-      // Auto-hide success message after 3 seconds
+      // Scroll to top to show success message
+      if (formRef.current) {
+        formRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+
+      // Auto-hide success message after 5 seconds
       setTimeout(() => {
         setSuccess(false);
-      }, 3000);
+      }, 5000);
     } catch (err) {
       setError(err.message || 'Failed to create order. Please try again.');
       console.error('Order creation error:', err);
+      
+      // Show more helpful error message based on attempt count
+      if (submissionAttempts >= 3) {
+        setError(
+          'Multiple submission failures detected. Please check your internet connection or contact support if the problem persists.'
+        );
+      }
     } finally {
       setLoading(false);
     }
@@ -213,19 +437,62 @@ function CreateOrderForm({ onSubmit, onCancel }) {
   };
 
   return (
-    <div className="create-order-form">
+    <div className="create-order-form" ref={formRef}>
       <div className="form-header">
         <h3>
           <span className="form-icon">📝</span>
           Create New Order
         </h3>
         <p className="form-subtitle">Fill in the details below to create a new order</p>
+        
+        {/* Keyboard shortcuts hint */}
+        <div className="keyboard-shortcuts-hint">
+          <small>
+            💡 <strong>Tip:</strong> Press <kbd>Ctrl+Enter</kbd> to submit • <kbd>Ctrl+S</kbd> to save draft • <kbd>Esc</kbd> to cancel
+          </small>
+        </div>
+        
+        {/* Draft indicator */}
+        {lastSavedDraft && isFormDirty && (
+          <div className="draft-indicator">
+            <span className="draft-icon">💾</span>
+            <span className="draft-text">
+              Draft saved at {new Date(lastSavedDraft).toLocaleTimeString()}
+            </span>
+          </div>
+        )}
       </div>
+      
+      {/* Validation Summary */}
+      {showValidationSummary && Object.keys(fieldErrors).length > 0 && (
+        <div className="validation-summary" role="alert">
+          <div className="validation-summary-header">
+            <span className="validation-icon">⚠️</span>
+            <strong>Please fix the following errors:</strong>
+          </div>
+          <ul className="validation-list">
+            {Object.entries(fieldErrors).map(([field, error]) => (
+              error && (
+                <li key={field}>
+                  <strong>{field.replace(/([A-Z])/g, ' $1').trim()}:</strong> {error}
+                </li>
+              )
+            ))}
+          </ul>
+        </div>
+      )}
       
       {error && (
         <div className="form-error" role="alert">
           <span className="error-icon">⚠️</span>
-          <span>{error}</span>
+          <div className="error-content">
+            <span>{error}</span>
+            {submissionAttempts > 1 && (
+              <small className="attempt-counter">
+                Attempt {submissionAttempts}
+              </small>
+            )}
+          </div>
         </div>
       )}
 
@@ -512,24 +779,72 @@ function CreateOrderForm({ onSubmit, onCancel }) {
         </div>
 
         <div className="form-actions">
-          <ButtonWithLoading
-            type="button"
-            onClick={onCancel}
-            variant="secondary"
-            disabled={loading}
-            icon="✖️"
-          >
-            Cancel
-          </ButtonWithLoading>
-          <ButtonWithLoading
-            type="submit"
-            variant="primary"
-            loading={loading}
-            loadingText="Creating Order..."
-            icon="✓"
-          >
-            Create Order
-          </ButtonWithLoading>
+          <div className="form-actions-left">
+            {/* Form status indicators */}
+            <div className="form-status-indicators">
+              {isFormDirty && !success && (
+                <span className="status-indicator status-unsaved" title="You have unsaved changes">
+                  <span className="indicator-dot"></span>
+                  Unsaved changes
+                </span>
+              )}
+              {isFormValid && !loading && (
+                <span className="status-indicator status-valid" title="Form is valid and ready to submit">
+                  ✓ Ready to submit
+                </span>
+              )}
+              {!isFormValid && Object.keys(touched).length > 0 && (
+                <span className="status-indicator status-invalid" title="Form has validation errors">
+                  ✗ {Object.keys(fieldErrors).filter(k => fieldErrors[k]).length} error(s)
+                </span>
+              )}
+            </div>
+          </div>
+          
+          <div className="form-actions-right">
+            <ButtonWithLoading
+              type="button"
+              onClick={handleCancel}
+              variant="secondary"
+              disabled={loading}
+              icon="✖️"
+            >
+              Cancel
+            </ButtonWithLoading>
+            
+            {/* Save Draft Button */}
+            {isFormDirty && !success && (
+              <ButtonWithLoading
+                type="button"
+                onClick={saveDraft}
+                variant="secondary"
+                disabled={loading}
+                icon="💾"
+                className="save-draft-btn"
+              >
+                Save Draft
+              </ButtonWithLoading>
+            )}
+            
+            <ButtonWithLoading
+              ref={submitButtonRef}
+              type="submit"
+              variant="primary"
+              loading={loading}
+              loadingText="Creating Order..."
+              disabled={!isFormValid || loading}
+              icon="✓"
+              title={
+                !isFormValid 
+                  ? 'Please fill in all required fields correctly' 
+                  : loading 
+                  ? 'Submitting...' 
+                  : 'Submit order (Ctrl+Enter)'
+              }
+            >
+              Create Order
+            </ButtonWithLoading>
+          </div>
         </div>
       </form>
     </div>

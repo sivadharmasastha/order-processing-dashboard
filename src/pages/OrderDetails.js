@@ -15,6 +15,8 @@ function OrderDetails() {
   const [isEditing, setIsEditing] = useState(false);
   const [editedOrder, setEditedOrder] = useState(null);
   const [successMessage, setSuccessMessage] = useState(null);
+  const [editFormErrors, setEditFormErrors] = useState({});
+  const [isEditFormValid, setIsEditFormValid] = useState(true);
 
   useEffect(() => {
     loadOrderDetails();
@@ -191,7 +193,7 @@ function OrderDetails() {
   };
 
   /**
-   * Handle edit form change
+   * Handle edit form change with validation
    */
   const handleEditChange = (e) => {
     const { name, value } = e.target;
@@ -199,20 +201,97 @@ function OrderDetails() {
       ...prev,
       [name]: value
     }));
+    
+    // Validate field
+    validateEditField(name, value);
+    
+    // Clear general error
+    if (error) {
+      setError(null);
+    }
   };
 
   /**
-   * Save edited order
+   * Validate edit form field
+   */
+  const validateEditField = (name, value) => {
+    let errorMessage = '';
+    
+    switch (name) {
+      case 'customerName':
+        if (!value?.trim()) {
+          errorMessage = 'Customer name is required';
+        } else if (value.trim().length < 2) {
+          errorMessage = 'Name must be at least 2 characters';
+        }
+        break;
+      case 'customerEmail':
+        if (!value?.trim()) {
+          errorMessage = 'Email is required';
+        } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
+          errorMessage = 'Please enter a valid email address';
+        }
+        break;
+      case 'productName':
+        if (!value?.trim()) {
+          errorMessage = 'Product name is required';
+        }
+        break;
+      case 'quantity':
+        const qty = parseInt(value);
+        if (isNaN(qty) || qty < 1) {
+          errorMessage = 'Quantity must be at least 1';
+        }
+        break;
+      case 'unitPrice':
+        const price = parseFloat(value);
+        if (isNaN(price) || price < 0) {
+          errorMessage = 'Unit price must be a positive number';
+        }
+        break;
+      default:
+        break;
+    }
+    
+    setEditFormErrors(prev => ({
+      ...prev,
+      [name]: errorMessage
+    }));
+    
+    // Check overall form validity
+    const hasErrors = Object.values({ ...editFormErrors, [name]: errorMessage }).some(err => err);
+    const hasRequiredFields = editedOrder?.customerName && editedOrder?.customerEmail && editedOrder?.productName;
+    setIsEditFormValid(!hasErrors && hasRequiredFields);
+  };
+
+  /**
+   * Save edited order with validation
    */
   const handleSaveEdit = async () => {
+    // Validate all fields before saving
+    const errors = {};
+    
+    if (!editedOrder.customerName?.trim()) {
+      errors.customerName = 'Customer name is required';
+    }
+    if (!editedOrder.customerEmail?.trim()) {
+      errors.customerEmail = 'Email is required';
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(editedOrder.customerEmail)) {
+      errors.customerEmail = 'Please enter a valid email address';
+    }
+    if (!editedOrder.productName?.trim()) {
+      errors.productName = 'Product name is required';
+    }
+    
+    if (Object.keys(errors).length > 0) {
+      setEditFormErrors(errors);
+      setError('Please correct the errors before saving');
+      return;
+    }
+    
     try {
       setUpdating(true);
       setError(null);
-      
-      // Validate edited data
-      if (!editedOrder.customerName || !editedOrder.customerEmail || !editedOrder.productName) {
-        throw new Error('Customer name, email, and product name are required');
-      }
       
       const updatedOrder = await updateOrder(orderId, editedOrder);
       
@@ -222,6 +301,7 @@ function OrderDetails() {
       setEditedOrder(orderData);
       
       setIsEditing(false);
+      setEditFormErrors({});
       setSuccessMessage('Order updated successfully!');
       
     } catch (err) {
@@ -464,9 +544,10 @@ function OrderDetails() {
               onClick={handleSaveEdit}
               loading={updating}
               loadingText="Saving..."
-              disabled={updating}
+              disabled={updating || !isEditFormValid}
               variant="success"
               icon="✓"
+              title={!isEditFormValid ? 'Please correct validation errors' : 'Save changes'}
             >
               Save Changes
             </ButtonWithLoading>
@@ -587,33 +668,45 @@ function OrderDetails() {
             Customer Information
           </h3>
           <div className="details-grid">
-            <div className="detail-item">
+            <div className={`detail-item ${editFormErrors.customerName ? 'has-error' : ''}`}>
               <label>Customer Name</label>
               {isEditing ? (
-                <input
-                  type="text"
-                  name="customerName"
-                  value={editedOrder.customerName}
-                  onChange={handleEditChange}
-                  className="edit-input"
-                  required
-                />
+                <>
+                  <input
+                    type="text"
+                    name="customerName"
+                    value={editedOrder.customerName}
+                    onChange={handleEditChange}
+                    className={`edit-input ${editFormErrors.customerName ? 'error' : ''}`}
+                    required
+                    aria-invalid={editFormErrors.customerName ? 'true' : 'false'}
+                  />
+                  {editFormErrors.customerName && (
+                    <span className="field-error">{editFormErrors.customerName}</span>
+                  )}
+                </>
               ) : (
                 <p className="detail-value">{order.customerName}</p>
               )}
             </div>
 
-            <div className="detail-item">
+            <div className={`detail-item ${editFormErrors.customerEmail ? 'has-error' : ''}`}>
               <label>Email</label>
               {isEditing ? (
-                <input
-                  type="email"
-                  name="customerEmail"
-                  value={editedOrder.customerEmail}
-                  onChange={handleEditChange}
-                  className="edit-input"
-                  required
-                />
+                <>
+                  <input
+                    type="email"
+                    name="customerEmail"
+                    value={editedOrder.customerEmail}
+                    onChange={handleEditChange}
+                    className={`edit-input ${editFormErrors.customerEmail ? 'error' : ''}`}
+                    required
+                    aria-invalid={editFormErrors.customerEmail ? 'true' : 'false'}
+                  />
+                  {editFormErrors.customerEmail && (
+                    <span className="field-error">{editFormErrors.customerEmail}</span>
+                  )}
+                </>
               ) : (
                 <p className="detail-value">
                   <a href={`mailto:${order.customerEmail}`} className="email-link">
@@ -654,17 +747,23 @@ function OrderDetails() {
             Product & Pricing
           </h3>
           <div className="details-grid">
-            <div className="detail-item">
+            <div className={`detail-item ${editFormErrors.productName ? 'has-error' : ''}`}>
               <label>Product Name</label>
               {isEditing ? (
-                <input
-                  type="text"
-                  name="productName"
-                  value={editedOrder.productName}
-                  onChange={handleEditChange}
-                  className="edit-input"
-                  required
-                />
+                <>
+                  <input
+                    type="text"
+                    name="productName"
+                    value={editedOrder.productName}
+                    onChange={handleEditChange}
+                    className={`edit-input ${editFormErrors.productName ? 'error' : ''}`}
+                    required
+                    aria-invalid={editFormErrors.productName ? 'true' : 'false'}
+                  />
+                  {editFormErrors.productName && (
+                    <span className="field-error">{editFormErrors.productName}</span>
+                  )}
+                </>
               ) : (
                 <p className="detail-value product-name">{order.productName}</p>
               )}
