@@ -3,11 +3,17 @@ import { useParams, useNavigate } from 'react-router-dom';
 import Loader from '../components/Loader';
 import { CardSkeleton } from '../components/SkeletonLoader';
 import ButtonWithLoading from '../components/ButtonWithLoading';
+import { InlineError } from '../components/ErrorNotification';
 import { fetchOrderById, updateOrder, retryOrder, patchOrder, cancelOrder } from '../services/api';
+import useErrorHandler from '../hooks/useErrorHandler';
 
 function OrderDetails() {
   const { orderId } = useParams();
   const navigate = useNavigate();
+  
+  // Error handling
+  const { executeWithErrorHandling, clearErrors } = useErrorHandler('order-details');
+  
   const [order, setOrder] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -34,37 +40,46 @@ function OrderDetails() {
 
   /**
    * Load order details with structured response handling
+   * Uses useErrorHandler hook for automatic retry and error management
    */
   const loadOrderDetails = async () => {
     try {
       setLoading(true);
       setError(null);
+      clearErrors(); // Clear previous errors
       
-      // Fetch order details from API with structured response handling
-      const response = await fetchOrderById(orderId);
-      
-      // Handle different response structures
-      let orderData = null;
-      
-      if (response && typeof response === 'object') {
-        // Check if response is wrapped (e.g., { success: true, data: {...} })
-        if (response.data && typeof response.data === 'object') {
-          orderData = response.data;
+      // Use executeWithErrorHandling for automatic retry and error management
+      const orderData = await executeWithErrorHandling(
+        async () => {
+          const response = await fetchOrderById(orderId);
+          
+          // Handle different response structures
+          let data = null;
+          if (response && typeof response === 'object') {
+            if (response.data && typeof response.data === 'object') {
+              data = response.data;
+            } else if (response.order && typeof response.order === 'object') {
+              data = response.order;
+            } else if (response.id) {
+              data = response;
+            }
+          }
+          
+          // Validate order data
+          if (!data || !data.id) {
+            throw new Error('Invalid order data received from server');
+          }
+          
+          return data;
+        },
+        {
+          maxRetries: 3,
+          retryDelay: 1000,
+          exponentialBackoff: true,
+          showError: true,
+          autoHideDuration: 5000
         }
-        // Check if response has order property
-        else if (response.order && typeof response.order === 'object') {
-          orderData = response.order;
-        }
-        // Direct order object
-        else if (response.id) {
-          orderData = response;
-        }
-      }
-      
-      // Validate order data
-      if (!orderData || !orderData.id) {
-        throw new Error('Invalid order data received from server');
-      }
+      );
       
       setOrder(orderData);
       setEditedOrder(orderData);
@@ -73,7 +88,7 @@ function OrderDetails() {
     } catch (err) {
       console.error('Error loading order details:', err);
       
-      // Provide user-friendly error messages
+      // Set local error message for inline display
       let errorMessage = 'Failed to load order details';
       
       if (err.message.includes('Network Error') || err.message.includes('connect')) {
@@ -98,6 +113,7 @@ function OrderDetails() {
 
   /**
    * Handle retry order
+   * Uses useErrorHandler for automatic retry and error management
    */
   const handleRetry = async () => {
     if (!window.confirm(`Retry processing order ${orderId}? This will attempt to reprocess the order.`)) {
@@ -107,8 +123,19 @@ function OrderDetails() {
     try {
       setUpdating(true);
       setError(null);
+      clearErrors();
       
-      await retryOrder(orderId);
+      await executeWithErrorHandling(
+        async () => await retryOrder(orderId),
+        {
+          maxRetries: 2,
+          retryDelay: 1000,
+          exponentialBackoff: true,
+          showError: true,
+          successMessage: 'Order retry initiated successfully!'
+        }
+      );
+      
       setSuccessMessage('Order retry initiated successfully!');
       
       // Reload order details to get updated status
@@ -124,6 +151,7 @@ function OrderDetails() {
 
   /**
    * Handle cancel order
+   * Uses useErrorHandler for automatic retry and error management
    */
   const handleCancel = async () => {
     const reason = window.prompt('Please provide a reason for cancellation (optional):');
@@ -132,8 +160,19 @@ function OrderDetails() {
     try {
       setUpdating(true);
       setError(null);
+      clearErrors();
       
-      await cancelOrder(orderId, reason);
+      await executeWithErrorHandling(
+        async () => await cancelOrder(orderId, reason),
+        {
+          maxRetries: 2,
+          retryDelay: 1000,
+          exponentialBackoff: true,
+          showError: true,
+          successMessage: 'Order cancelled successfully!'
+        }
+      );
+      
       setSuccessMessage('Order cancelled successfully!');
       
       // Reload order details to get updated status

@@ -6,10 +6,15 @@ import Loader from '../components/Loader';
 import ApiStatus from '../components/ApiStatus';
 import { TableSkeleton } from '../components/SkeletonLoader';
 import ButtonWithLoading from '../components/ButtonWithLoading';
+import { InlineError } from '../components/ErrorNotification';
 import { fetchOrders, createOrder, deleteOrder } from '../services/api';
 import useApiStatus from '../hooks/useApiStatus';
+import useErrorHandler from '../hooks/useErrorHandler';
 
 function OrdersPage() {
+  // Error handling
+  const { executeWithErrorHandling, clearErrors } = useErrorHandler('orders-page');
+  
   // API Status
   const { isOnline: apiOnline } = useApiStatus(60000);
   
@@ -89,11 +94,9 @@ function OrdersPage() {
 
   /**
    * Fetch orders from API with production-level error handling
-   * Implements retry logic and comprehensive error management
+   * Uses useErrorHandler hook with automatic retry logic
    */
-  const loadOrders = useCallback(async (silent = false, retryCount = 0) => {
-    const MAX_RETRIES = 2;
-    
+  const loadOrders = useCallback(async (silent = false) => {
     try {
       if (!silent) {
         setLoading(true);
@@ -101,28 +104,33 @@ function OrdersPage() {
         setRefreshing(true);
       }
       setError(null);
+      clearErrors(); // Clear previous errors
       
-      // Build query parameters for API filtering
-      const params = {};
-      
-      // Add server-side filtering if backend supports it
-      if (statusFilter !== 'all') {
-        params.status = statusFilter;
-      }
-      
-      // Add pagination params if needed
-      // params.page = currentPage;
-      // params.limit = itemsPerPage;
-      
-      // Fetch orders from API
-      const data = await fetchOrders(params);
+      // Use executeWithErrorHandling for automatic retry and error management
+      const data = await executeWithErrorHandling(
+        async () => {
+          // Build query parameters for API filtering
+          const params = {};
+          if (statusFilter !== 'all') {
+            params.status = statusFilter;
+          }
+          
+          return await fetchOrders(params);
+        },
+        {
+          maxRetries: 3,
+          retryDelay: 1000,
+          exponentialBackoff: true,
+          showError: true,
+          autoHideDuration: 5000
+        }
+      );
       
       // Handle different response formats
       let ordersArray = [];
       if (Array.isArray(data)) {
         ordersArray = data;
       } else if (data && typeof data === 'object') {
-        // Handle paginated response: { orders: [], total: 100, page: 1 }
         ordersArray = data.orders || data.data || [];
       }
       
@@ -137,15 +145,7 @@ function OrdersPage() {
     } catch (err) {
       console.error('Error loading orders:', err);
       
-      // Implement retry logic for transient failures
-      if (retryCount < MAX_RETRIES && 
-          (err.message.includes('network') || err.message.includes('timeout'))) {
-        console.log(`Retrying... Attempt ${retryCount + 1}/${MAX_RETRIES}`);
-        await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1)));
-        return loadOrders(silent, retryCount + 1);
-      }
-      
-      // Handle specific error cases
+      // Set local error message for inline display
       let errorMessage = 'Failed to load orders';
       
       if (err.message.includes('Network Error') || err.message.includes('connect')) {
@@ -172,7 +172,7 @@ function OrdersPage() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [statusFilter]);
+  }, [statusFilter, executeWithErrorHandling, clearErrors]);
 
   /**
    * Apply client-side filters and sorting
@@ -235,14 +235,23 @@ function OrdersPage() {
    * Handle order creation with API integration
    */
   const handleCreateOrder = async (orderData) => {
+    // Validate order data before sending
+    if (!orderData.customerName || !orderData.customerEmail || !orderData.productName) {
+      throw new Error('Missing required fields');
+    }
+    
     try {
-      // Validate order data before sending
-      if (!orderData.customerName || !orderData.customerEmail || !orderData.productName) {
-        throw new Error('Missing required fields');
-      }
-      
-      // Create order via API
-      const newOrder = await createOrder(orderData);
+      // Use executeWithErrorHandling for automatic retry and error management
+      const newOrder = await executeWithErrorHandling(
+        async () => await createOrder(orderData),
+        {
+          maxRetries: 2,
+          retryDelay: 1000,
+          exponentialBackoff: true,
+          showError: true,
+          successMessage: `Order created successfully!`
+        }
+      );
       
       // Update local state optimistically
       setOrders(prevOrders => [newOrder, ...prevOrders]);
@@ -251,27 +260,10 @@ function OrdersPage() {
       
       console.log('✓ Order created:', newOrder.id);
       
-      // Optionally refresh the full list to ensure consistency
-      // await loadOrders(true);
-      
       return newOrder;
     } catch (err) {
       console.error('Error creating order:', err);
-      
-      // Provide user-friendly error messages
-      let errorMessage = 'Failed to create order';
-      
-      if (err.message.includes('Network Error')) {
-        errorMessage = 'Unable to connect to server. Please check your connection.';
-      } else if (err.message.includes('400')) {
-        errorMessage = 'Invalid order data. Please check your inputs.';
-      } else if (err.message.includes('409')) {
-        errorMessage = 'Order already exists or conflict detected.';
-      } else if (err.message) {
-        errorMessage = err.message;
-      }
-      
-      throw new Error(errorMessage);
+      throw err;
     }
   };
 
@@ -290,8 +282,17 @@ function OrdersPage() {
       // Optimistic update - remove from UI immediately
       setOrders(prevOrders => prevOrders.filter(order => order.id !== orderId));
       
-      // Delete via API
-      await deleteOrder(orderId);
+      // Use executeWithErrorHandling for automatic retry and error management
+      await executeWithErrorHandling(
+        async () => await deleteOrder(orderId),
+        {
+          maxRetries: 2,
+          retryDelay: 1000,
+          exponentialBackoff: true,
+          showError: true,
+          successMessage: `Order ${orderId} deleted successfully!`
+        }
+      );
       
       setSuccessMessage(`Order ${orderId} deleted successfully!`);
       console.log('✓ Order deleted:', orderId);
@@ -301,21 +302,7 @@ function OrdersPage() {
       
       // Rollback on failure
       setOrders(originalOrders);
-      
-      // Provide user-friendly error messages
-      let errorMessage = 'Failed to delete order';
-      
-      if (err.message.includes('Network Error')) {
-        errorMessage = 'Unable to connect to server. Order not deleted.';
-      } else if (err.message.includes('404')) {
-        errorMessage = 'Order not found or already deleted.';
-      } else if (err.message.includes('403')) {
-        errorMessage = 'You do not have permission to delete this order.';
-      } else if (err.message) {
-        errorMessage = err.message;
-      }
-      
-      setError(errorMessage);
+      setError('Failed to delete order. Please try again.');
     }
   };
 
