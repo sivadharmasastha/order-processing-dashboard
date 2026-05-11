@@ -110,7 +110,7 @@ function ErrorNotification({
   };
 
   /**
-   * Handle retry with loading state
+   * Handle retry with loading state and visual feedback
    */
   const handleRetry = async () => {
     if (!retry || isRetrying) return;
@@ -120,6 +120,7 @@ function ErrorNotification({
       await onRetry(error.id);
     } catch (err) {
       console.error('Retry failed:', err);
+      // Error will be handled by the error context
     } finally {
       setIsRetrying(false);
     }
@@ -141,15 +142,16 @@ function ErrorNotification({
   const suggestions = getSuggestions();
 
   return (
-    <div className={containerClass} role="alert">
+    <div className={containerClass} role="alert" aria-live="assertive">
+      <div className="error-notification-progress-bar"></div>
       <div className="error-notification-content">
         <div className="error-notification-header">
-          <div className="error-notification-icon">{getErrorIcon()}</div>
+          <div className="error-notification-icon" aria-hidden="true">{getErrorIcon()}</div>
           <div className="error-notification-title-section">
             <h3 className="error-notification-title">{getErrorTitle()}</h3>
             {statusCode && (
               <span className="error-notification-status">
-                Status: {statusCode}
+                HTTP {statusCode}
               </span>
             )}
           </div>
@@ -158,6 +160,7 @@ function ErrorNotification({
               onClick={() => onDismiss(error.id)}
               className="error-notification-close"
               aria-label="Dismiss error"
+              title="Dismiss"
             >
               ✕
             </button>

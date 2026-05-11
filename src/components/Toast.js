@@ -7,7 +7,28 @@ import { useError, ERROR_SEVERITY } from '../context/ErrorContext';
  * Displays individual toast notification
  */
 function Toast({ error, onClose, onRetry }) {
-  const { message, severity, type, retry, dismissible, context } = error;
+  const [isClosing, setIsClosing] = React.useState(false);
+  const [progress, setProgress] = React.useState(100);
+  const { message, severity, type, retry, dismissible, context, autoHideDuration } = error;
+
+  // Auto-hide progress animation
+  React.useEffect(() => {
+    if (autoHideDuration && dismissible) {
+      const startTime = Date.now();
+      const interval = setInterval(() => {
+        const elapsed = Date.now() - startTime;
+        const remaining = Math.max(0, 100 - (elapsed / autoHideDuration) * 100);
+        setProgress(remaining);
+        
+        if (remaining === 0) {
+          clearInterval(interval);
+          handleClose();
+        }
+      }, 50);
+      
+      return () => clearInterval(interval);
+    }
+  }, [autoHideDuration, dismissible]);
 
   /**
    * Get toast icon based on severity
@@ -35,7 +56,7 @@ function Toast({ error, onClose, onRetry }) {
   };
 
   /**
-   * Handle retry action
+   * Handle retry action with visual feedback
    */
   const handleRetry = async () => {
     if (retry) {
@@ -43,10 +64,23 @@ function Toast({ error, onClose, onRetry }) {
     }
   };
 
+  /**
+   * Handle close with animation
+   */
+  const handleClose = () => {
+    setIsClosing(true);
+    setTimeout(() => {
+      onClose(error.id);
+    }, 300);
+  };
+
   return (
-    <div className={getToastClass()} role="alert">
+    <div className={`${getToastClass()} ${isClosing ? 'toast-closing' : ''}`} role="alert" aria-live="polite">
+      {autoHideDuration && dismissible && (
+        <div className="toast-progress" style={{ width: `${progress}%` }}></div>
+      )}
       <div className="toast-content">
-        <div className="toast-icon">{getIcon()}</div>
+        <div className="toast-icon" aria-hidden="true">{getIcon()}</div>
         <div className="toast-body">
           <div className="toast-message">{message}</div>
           {context && context !== 'general' && (
@@ -61,15 +95,17 @@ function Toast({ error, onClose, onRetry }) {
             onClick={handleRetry} 
             className="toast-btn toast-btn-retry"
             aria-label="Retry action"
+            title="Retry"
           >
             ↻ Retry
           </button>
         )}
         {dismissible && (
           <button 
-            onClick={() => onClose(error.id)} 
+            onClick={handleClose} 
             className="toast-btn toast-btn-close"
             aria-label="Close notification"
+            title="Dismiss"
           >
             ✕
           </button>
